@@ -410,7 +410,8 @@ static RK_S32 vpu_encode_demo(VpuApiDemoCmdContext_t *cmd)
     
     //Richard: add the file header
     if(ctx->videoCoding == OMX_RK_VIDEO_CodingVP8)
-    {
+    {   
+        //Important: need to write the head,or the vp8 file will not be played
         write_ivf_file_header(pOutFile, enc_param, 0);
     }
 
