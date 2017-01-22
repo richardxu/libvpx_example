@@ -6,6 +6,7 @@
 #include "utils/Log.h"
 #include "vpu_api.h"
 #include <stdlib.h>
+//#include <utils/Log.h>
 
 #undef LOG_TAG
 #define LOG_TAG "vpu_api_demo"
@@ -13,6 +14,7 @@
 static RK_U32 VPU_API_DEMO_DEBUG_DISABLE = 0;
 
 #define VPU_API_DEMO_DEBUG 1
+//#define AVS40
 
 #ifdef  VPU_API_DEMO_DEBUG
 #ifdef AVS40
@@ -247,6 +249,66 @@ static RK_S32 readBytesFromFile(RK_U8* buf, RK_S32 aBytes, FILE* file)
     return 0;
 }
 
+#define fourcc    0x30385056
+#define IVF_FILE_HDR_SZ  (32)
+#define IVF_FRAME_HDR_SZ (12)
+
+static void mem_put_le16(char *mem, unsigned int val) {
+    mem[0] = val;
+    mem[1] = val>>8;
+}
+
+static void mem_put_le32(char *mem, unsigned int val) {
+    mem[0] = val;
+    mem[1] = val>>8;
+    mem[2] = val>>16;
+    mem[3] = val>>24;
+}
+
+
+static void write_ivf_file_header(FILE *outfile,
+                               const EncParameter_t *cfg,//   const vpx_codec_enc_cfg_t *cfg,
+                                  int frame_cnt) {
+    char header[32];
+    
+   // if(cfg->g_pass != VPX_RC_ONE_PASS && cfg->g_pass != VPX_RC_LAST_PASS)
+     //   return;
+    header[0] = 'D';
+    header[1] = 'K';
+    header[2] = 'I';
+    header[3] = 'F';
+    mem_put_le16(header+4,  0);                   /* version */
+    mem_put_le16(header+6,  32);                  /* headersize */
+    mem_put_le32(header+8,  fourcc);              /* headersize */
+    mem_put_le16(header+12, cfg->width);            /* width */
+    mem_put_le16(header+14, cfg->height);            /* height */
+    mem_put_le32(header+16, cfg->framerate); /* rate */
+    mem_put_le32(header+20, 1); /* scale */
+    mem_put_le32(header+24, frame_cnt);           /* length */
+    mem_put_le32(header+28, 0);                   /* unused */
+    
+    fwrite(header, 1, 32, outfile);
+}
+
+//pts -----pts       Presentation time stamp, in timebase units =------ time stamp
+/*static void write_ivf_frame_header(FILE *outfile,
+                                   const vpx_codec_cx_pkt_t *pkt)
+{
+    char             header[12];
+    vpx_codec_pts_t  pts;
+    
+  //  if(pkt->kind != VPX_CODEC_CX_FRAME_PKT)
+    //    return;
+    
+    pts = pkt->data.frame.pts;
+    mem_put_le32(header, pkt->data.frame.sz);
+    mem_put_le32(header+4, pts&0xFFFFFFFF);
+    mem_put_le32(header+8, pts >> 32);
+    
+    fwrite(header, 1, 12, outfile);
+}*/
+
+
 static RK_S32 vpu_encode_demo(VpuApiDemoCmdContext_t *cmd)
 {
     if (cmd == NULL) {
@@ -345,6 +407,12 @@ static RK_S32 vpu_encode_demo(VpuApiDemoCmdContext_t *cmd)
     enc_param->enableCabac   = 0;
     enc_param->cabacInitIdc  = 0;
     enc_param->intraPicRate  = 30;
+    
+    //Richard: add the file header
+    if(ctx->videoCoding == OMX_RK_VIDEO_CodingVP8)
+    {
+        write_ivf_file_header(pOutFile, enc_param, 0);
+    }
 
     if ((ret = ctx->init(ctx, NULL, 0)) != 0) {
         VPU_DEMO_LOG("init vpu api context fail, ret: 0x%X", ret);
@@ -382,6 +450,9 @@ static RK_S32 vpu_encode_demo(VpuApiDemoCmdContext_t *cmd)
     RK_U32 h_align = ctx->height;
     size = w_align * h_align * 3 / 2;
     nal = BSWAP32(nal);
+                        
+    char header[12];
+    RK_S64  pts;
 
     do {
         if (ftell(pInFile) >= fileSize) {
@@ -434,6 +505,21 @@ static RK_S32 vpu_encode_demo(VpuApiDemoCmdContext_t *cmd)
                                  enc_out->size);
                     if (ctx->videoCoding == OMX_RK_VIDEO_CodingAVC) {
                         fwrite((uint8_t*)&nal, 1, 4, pOutFile);
+                    }
+                    if(ctx->videoCoding == OMX_RK_VIDEO_CodingVP8) {
+                        // write_ivf_frame_header(pOutFile, pkt);
+//                        char             header[12];
+  //                      RK_S64  pts;
+                        
+                        //  if(pkt->kind != VPX_CODEC_CX_FRAME_PKT)
+                        //    return;
+                        
+                        pts = enc_in->timeUs; //pkt->data.frame.pts;
+                        mem_put_le32(header, enc_out->size);
+                        mem_put_le32(header+4, pts&0xFFFFFFFF);
+                        mem_put_le32(header+8, pts >> 32);
+                        
+                        fwrite(header, 1, 12, pOutFile);
                     }
                     fwrite(enc_out->data, 1, enc_out->size, pOutFile);
                     fflush(pOutFile);
