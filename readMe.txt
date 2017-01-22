@@ -28,6 +28,10 @@ The encode test input yuv bitstream(YUV420_SEMI_PLANAR) is also given with this 
 
 run avc encode test command in adb shell mode:
 vpu_apiDemo -i /mnt/sdcard/vpu_enc_input_yuv420sp_320x240.yuv -o /mnt/sdcard/enc_out.264 -coding 7 -t 2 -w 320 -h 240
+vpu_apiDemo -i /mnt/sdcard/1080p_blue_sky.yuv -o /mnt/sdcard/enc_out.264 -coding 7 -t 2 -w 1920 -h 1080
+
+encoding with vp8:
+vpu_apiDemo -i /mnt/sdcard/1080p_blue_sky.yuv -o /mnt/sdcard/enc_out.vp8 -coding 9 -t 2 -w 1920 -h 1080
 
 Note: 
 Current demo source just use one test bin file(with WMV3 coding) for decoding test,
